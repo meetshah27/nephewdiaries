@@ -1,17 +1,56 @@
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
 
-/*== STEP 1 ===============================================================
-The section below creates a Todo database table with a "content" field. Try
-adding a new "isDone" field as a boolean. The authorization rule below
-specifies that any user authenticated via an API key can "create", "read",
-"update", and "delete" any "Todo" records.
+/*== NEPHEW DIARIES - BIRTHDAY TIME CAPSULE ===============================
+This schema creates a birthday message time capsule for a nephew where:
+- Family members can add birthday messages for specific ages
+- Messages unlock on each birthday (February 20th)
+- Admin users can add/edit messages
+- Countdown to next birthday is tracked
 =========================================================================*/
+
 const schema = a.schema({
-  Todo: a
+  BirthdayMessage: a
     .model({
-      content: a.string(),
+      age: a.integer().required(), // Age this message is for (1, 2, 3, etc.)
+      title: a.string().required(), // Message title
+      content: a.string().required(), // Text message content
+      videoUrl: a.string(), // Optional video URL
+      fromFamilyMember: a.string().required(), // Who sent this message
+      isUnlocked: a.boolean().default(false), // Whether this message can be viewed
+      unlockDate: a.string().required(), // When this message unlocks (birthday date)
+      createdAt: a.string().required(), // When message was created
     })
-    .authorization((allow) => [allow.publicApiKey()]),
+    .authorization((allow) => [
+      // Admin users can create, read, update, delete
+      allow.owner(),
+      // Public can read unlocked messages
+      allow.public().read().when((ctx) => ctx.arguments.isUnlocked === true),
+    ]),
+
+  User: a
+    .model({
+      email: a.string().required(),
+      name: a.string().required(),
+      password: a.string().required(), // Password for custom authentication
+      role: a.enum(['admin', 'family']).default('family'),
+      isActive: a.boolean().default(true),
+    })
+    .authorization((allow) => [
+      allow.owner(),
+      allow.public().read(),
+    ]),
+
+  BirthdayCountdown: a
+    .model({
+      currentAge: a.integer().required(),
+      nextBirthday: a.string().required(), // ISO date string
+      daysUntilBirthday: a.integer().required(),
+      birthDate: a.string().required(), // Original birth date
+    })
+    .authorization((allow) => [
+      allow.public().read(),
+      allow.owner(),
+    ]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
@@ -19,10 +58,10 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: "apiKey",
-    // API Key is used for a.allow.public() rules
+    defaultAuthorizationMode: "userPool",
+    // API Key for public read access to unlocked messages
     apiKeyAuthorizationMode: {
-      expiresInDays: 30,
+      expiresInDays: 365,
     },
   },
 });
